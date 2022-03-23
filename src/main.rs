@@ -42,18 +42,24 @@ fn main() {
     let mut index = repo.index().unwrap();
     let tree_id = index.write_tree().unwrap();
     let tree = repo.find_tree(tree_id).unwrap();
-    let success = repo
-        .statuses(None)
-        .unwrap()
-        .iter()
-        .any(|x| x.status().contains(git2::Status::INDEX_MODIFIED));
+    let success = repo.statuses(None).unwrap().iter().any(|x| {
+        let s = x.status();
+        s.contains(git2::Status::INDEX_MODIFIED) || s.contains(git2::Status::INDEX_NEW)
+    });
+
     if !success {
         return lib::warn("No changes to commit");
     }
 
     let user = &repo.signature().unwrap();
 
-    if let Err(msg) = repo.commit(Some("HEAD"), &user, &user, &message, &tree, parents) {
-        lib::warn(&msg.to_string())
-    }
+    let status = repo.commit(Some("HEAD"), user, user, &message, &tree, parents);
+
+    let oid = match status {
+        Err(e) => return lib::err(&format!("{}", e)),
+        Ok(value) => value,
+    };
+
+    let commit = repo.find_commit(oid).unwrap();
+    lib::info(&format!("{:?}", commit));
 }
